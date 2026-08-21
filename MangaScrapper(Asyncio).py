@@ -1,6 +1,7 @@
 # ======= CONFIG =======
-START_LINK = "https://truyenqqko.com/truyen-tranh/jujutsu-kaisen-chu-thuat-hoi-chien-5058"
-FOLDER = "JJK"
+START_LINK = "https://truyenqqko.com/truyen-tranh/hao-vi-ham-nguc-865"
+FOLDER = "DungeonMeshi"
+AUTHOR = "Dungeon Meshi"
 
 WORKER_COUNT = 4
 SAVE_SEM_COUNT = 4
@@ -315,6 +316,7 @@ class FileManager:
         if folder not in self.data:
             self.data[folder] = {}
         self.state:dict = self.data[folder]
+        self.titleList:dict = {}
     
     def _updateJson(self):
         with open("Completed.json", "w", encoding="utf-8") as f:
@@ -325,9 +327,9 @@ class FileManager:
         prefix = name.split()[0]
         num = name.split()[1].split('.')
         if len(num) == 1:
-            return f"{prefix} {num[0].zfill(3)}0"
+            return f"{num[0].zfill(4)}0"
         elif len(num) == 2 and num[1].isdigit():
-            return f"{prefix} {num[0].zfill(3)}{num[1]}"
+            return f"{num[0].zfill(4)}{num[1]}"
         else:
             raise ValueError
     
@@ -453,7 +455,7 @@ class FileManager:
 
         return img
 
-    def _images_to_pdf(self, images: list[bytes], output: str):
+    def _images_to_pdf(self, images: list[bytes], output: str, title: str = ""):
         if not images:
             return
 
@@ -466,8 +468,6 @@ class FileManager:
 
             except Exception as e:
                 # Không đọc được -> thay bằng ảnh báo lỗi
-                img = self._create_error_image(index, data)
-                pil_images.append(img)
 
                 with open("error.log", "a", encoding="utf-8") as f:
                     print(
@@ -475,6 +475,8 @@ class FileManager:
                         file=f
                     )
                     traceback.print_exc(file=f)
+                img = self._create_error_image(index, data)
+                pil_images.append(img)
 
         if not pil_images:
             raise ValueError("Không có ảnh để tạo PDF")
@@ -486,6 +488,8 @@ class FileManager:
                 resolution=100.0,
                 save_all=True,
                 append_images=pil_images[1:],
+                author=AUTHOR,
+                title=title
             )
         finally:
             for img in pil_images:
@@ -493,7 +497,7 @@ class FileManager:
     
     async def save(self, name, images: list[bytes]):
         output = os.path.join(FOLDER, f"{name}.pdf")
-        await asyncio.to_thread(self._images_to_pdf, images, output)
+        await asyncio.to_thread(self._images_to_pdf, images, output, self.titleList[name])
         self.state[name] = True
         self._updateJson()
         
@@ -504,6 +508,7 @@ class FileManager:
             if self.state.get(name, False) == False:
                 ans.append([name, i[1]])
                 self.state[name] = False
+                self.titleList[name] = i[0]
         self.data[FOLDER] = self.state = dict(sorted(self.state.items()))
         self._updateJson()
         return ans
@@ -549,17 +554,18 @@ async def save_chapter(name, images, file: FileManager, screen: ProgressDisplay,
         finally:
             screen.progress(file.getCompletedChapter(), file.getLenChapter())
     
-async def wait_for_all_images(chapter, src, images: dict, screen:ProgressDisplay, deadline = 60):
+async def wait_for_all_images(chapter, srcs, images: dict, screen:ProgressDisplay, deadline = 60):
     # Lướt qua từng src, kiểm tra trong images đã có ảnh chưa
+    # Lọc bỏ các ảnh không đúng đuôi
     counter = 0
     while True:
-        need = set(src)
+        need = set(srcs)
         have = set(images.keys())
         if need and need.issubset(have):
             return
         if counter > deadline:
             raise PlaywrightTimeoutError(
-                f"Cho anh qua lau cho '{src}' "
+                f"Cho anh qua lau cho '{srcs}' "
                 f"({len(have & need)}/{len(need)} anh)"
             )
         counter += 1
@@ -596,6 +602,7 @@ async def worker(worker_id, queue, browser, file:FileManager, screen:ProgressDis
                     return url.href;
                 })"""
             )
+            srcs = [i for i in srcs if i.endswith((".jpg", ".jpeg", ".png"))] # Loại bỏ ảnh không phù hợp
             await wait_for_all_images(name ,srcs, images, screen)
             task = asyncio.create_task(
                 save_chapter(name, 
@@ -649,6 +656,7 @@ async def main():
 
         await queue.join()
         await asyncio.gather(*workers)
+        await asyncio.gather(*save_tasks)
         await browser.close()
         input()
 
