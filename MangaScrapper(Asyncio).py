@@ -1,7 +1,7 @@
 # ======= CONFIG =======
-START_LINK = "https://truyenqqko.com/truyen-tranh/hao-vi-ham-nguc-865"
-FOLDER = "DungeonMeshi"
-AUTHOR = "Dungeon Meshi"
+START_LINK = "https://truyenqqko.com/truyen-tranh/jujutsu-kaisen-chu-thuat-hoi-chien-5058"
+FOLDER = "JJK"
+AUTHOR = "Jujutsu Kaisen"
 
 WORKER_COUNT = 4
 SAVE_SEM_COUNT = 4
@@ -148,7 +148,6 @@ class ProgressDisplay:
 
     @staticmethod
     def chapter_sort_key(name):
-
         try:
             number = int(
                 "".join(
@@ -156,7 +155,6 @@ class ProgressDisplay:
                     if c.isdigit()
                 )
             )
-
             return (0, number)
 
         except ValueError:
@@ -191,6 +189,7 @@ class ProgressDisplay:
             f"{self.progress_num1}/"
             f"{self.progress_num2} "
             f"{progress_bar}"
+            f" {round(ratio * 100)}%"
         )
 
         # =========================
@@ -496,19 +495,20 @@ class FileManager:
                 img.close()
     
     async def save(self, name, images: list[bytes]):
-        output = os.path.join(FOLDER, f"{name}.pdf")
-        await asyncio.to_thread(self._images_to_pdf, images, output, self.titleList[name])
+        output = os.path.join(FOLDER, f"{self.titleList[name][1]} - {self.titleList[name][0]}.pdf")
+        await asyncio.to_thread(self._images_to_pdf, images, output, self.titleList[name][0])
         self.state[name] = True
         self._updateJson()
         
     def remainLinks(self, links: list):
         ans = []
-        for i in links:
+        lenLinks = len(str(len(links)))
+        for pos, i in enumerate(links):
             name = self._handle_name(i[0])
             if self.state.get(name, False) == False:
                 ans.append([name, i[1]])
                 self.state[name] = False
-                self.titleList[name] = i[0]
+                self.titleList[name] = (i[0],str(pos).zfill(lenLinks))
         self.data[FOLDER] = self.state = dict(sorted(self.state.items()))
         self._updateJson()
         return ans
@@ -517,7 +517,6 @@ class FileManager:
         return len(self.state)
     def getCompletedChapter(self):
         return sum(1 for v in self.state.values() if v is True)
-    
 
 async def handle_response(response, image: dict):
     url = response.url
